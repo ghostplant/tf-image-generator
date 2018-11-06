@@ -11,9 +11,11 @@ __ops_name__ = __loader__.name.split('.')[-1]
 library = loader.load_op_library(resource_loader.get_path_to_datafile('_lib_ops.so'))
 
 
-def image_pipe(directory_url, batch_size, height, width, image_format='NCHW',
-               parallel=8, rescale=0.00392157, seed=0, synchronize=True, logging=True, cache_mbytes=512):
+def flow_from_directory(directory_url, batch_size, target_size, image_format='NCHW',
+               parallel=8, rescale=1.0, seed=0, synchronize=True, logging=True, cache_mbytes=512):
   ''' Wrapper of ImagePipe Kernel Op'''
+
+  height, width = target_size
 
   images, labels = library.image_pipe(
     directory_url=directory_url,

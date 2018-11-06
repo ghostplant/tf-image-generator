@@ -37,6 +37,7 @@ limitations under the License.
 #include <thread>
 #include <unordered_map>
 
+
 #if !defined(__linux__)
 #error "Only Linux platform is supported at the moment (with CUDA)."
 #endif
@@ -140,7 +141,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
         worker.mu_.lock();
         if (worker.ord_que.size() >= cache_size) {
           worker.mu_.unlock();
-          usleep(200000);
+          usleep(50000);
           if (threadStop)
             return;
           continue;
