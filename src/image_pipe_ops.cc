@@ -63,6 +63,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
     OP_REQUIRES_OK(c, c->GetAttr("synchronize", &synchronize));
     OP_REQUIRES_OK(c, c->GetAttr("logging", &logging));
     OP_REQUIRES_OK(c, c->GetAttr("cache_mbytes", &cache_mbytes));
+    OP_REQUIRES_OK(c, c->GetAttr("warmup", &warmup));
 
     if (directory_url.size() > 0 && directory_url[directory_url.size() - 1] != '/')
       directory_url += '/';
@@ -129,6 +130,16 @@ class ImagePipeOpKernel: public AsyncOpKernel {
         this->BackgroundWorker(i, gpu_id);
       });
     }
+
+    if (warmup) {
+      if (logging)
+        LOG(INFO) << "Warming up image generation..";
+      for (int i = 0; i < parallel; ++i)
+        while (!workers[i].postWarmup)
+          usleep(500000);
+      if (logging)
+        LOG(INFO) << "Finish image warmup.";
+    }
   }
 
   void BackgroundWorker(int idx, int gpu_id) {
@@ -141,7 +152,8 @@ class ImagePipeOpKernel: public AsyncOpKernel {
         worker.mu_.lock();
         if (worker.ord_que.size() >= cache_size) {
           worker.mu_.unlock();
-          usleep(50000);
+          worker.postWarmup = true;
+          usleep(100000);
           if (threadStop)
             return;
           continue;
@@ -334,6 +346,10 @@ class ImagePipeOpKernel: public AsyncOpKernel {
     mutex mu_;
     queue<void*> ord_que;
     vector<void*> buffers;
+    bool postWarmup;
+
+    Worker(): handle(nullptr), postWarmup(false) {
+    }
   };
 
   vector<Worker> workers;
@@ -345,7 +361,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
   int cache_size, parallel, seed, cache_mbytes;
   float rescale;
 
-  bool synchronize, logging;
+  bool synchronize, logging, warmup;
   volatile bool threadStop;
 
   vector<vector<void*>> lazyRecycleBuffers;
@@ -368,7 +384,8 @@ REGISTER_OP("ImagePipe")
     .Attr("seed: int = 0")
     .Attr("synchronize: bool = true")
     .Attr("logging: bool = true")
-    .Attr("cache_mbytes: int = 512")
+    .Attr("cache_mbytes: int = 256")
+    .Attr("warmup: bool = true")
     .SetIsStateful()
     .SetShapeFn(shape_inference::UnknownShape);
 

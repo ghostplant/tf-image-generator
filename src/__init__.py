@@ -12,7 +12,7 @@ library = loader.load_op_library(resource_loader.get_path_to_datafile('_lib_ops.
 
 
 def flow_from_directory(directory_url, batch_size, target_size, image_format='NCHW',
-               parallel=8, rescale=1.0, seed=0, synchronize=True, logging=True, cache_mbytes=512):
+               parallel=8, rescale=1.0, seed=0, synchronize=True, logging=True, cache_mbytes=256, warmup=True):
   ''' Wrapper of ImagePipe Kernel Op'''
 
   height, width = target_size
@@ -28,11 +28,13 @@ def flow_from_directory(directory_url, batch_size, target_size, image_format='NC
     seed=seed,
     synchronize=synchronize,
     logging=logging,
-    cache_mbytes=cache_mbytes)
+    cache_mbytes=cache_mbytes,
+    warmup=warmup)
+
   if image_format == 'NCHW':
     images = tf.reshape(images, [batch_size, 3, height, width])
   else:
     images = tf.reshape(images, [batch_size, height, width, 3])
-
   labels = tf.reshape(labels, [batch_size,])
+
   return images, labels
