@@ -18,9 +18,12 @@ Usage: Reading original JPEG image directories stored on SSD (in standard Keras 
     /class-monkey/
         aug_1.jpg
         aug_2.jpg
+        ...
     /class-bird/
         aug_1.jpg
         aug_2.jpg
+        ...
+    ...
 ```
 
 ### The usage of ImagePipe is similar to tf.keras.ImageDataGenerator
@@ -37,7 +40,7 @@ cd tf-image-pipe
 ./setup.sh
 
 # Test MNIST Example:
-./test_example.py
+./examples/mnist_example.py
 ```
 
 ### Issues:
