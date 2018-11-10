@@ -32,7 +32,7 @@ Usage: Reading original JPEG image directories stored on SSD (in standard Keras 
 
 ```sh
 # Install GPU-based Tensorflow on Ubuntu:
-pip3 install tensorflow-gpu (>= r1.10)
+pip3 install https://github.com/ghostplant/tensorflow-cuda-optimized/releases/download/tf-1.10-linux/tensorflow-1.10_cuda9.0_ubu1604-cp35-cp35m-linux_x86_64.whl
 
 # Install ImagePipe Ops:
 git clone https://github.com/ghostplant/tf-image-pipe
