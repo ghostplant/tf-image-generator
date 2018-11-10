@@ -14,8 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 
-#if GOOGLE_CUDA
-
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -47,6 +45,10 @@ namespace {
 
 using namespace std;
 
+typedef Eigen::ThreadPoolDevice CPUDevice;
+typedef Eigen::GpuDevice GPUDevice;
+
+template <typename Device>
 class ImagePipeOpKernel: public AsyncOpKernel {
  public:
 
@@ -110,7 +112,10 @@ class ImagePipeOpKernel: public AsyncOpKernel {
       }
       n_class = keyset.size();
 
+      isGpuDevice = !!c->device()->tensorflow_gpu_device_info();
+
       if (logging) {
+        LOG(INFO) << "Device for Image Buffers: " << (isGpuDevice ? "GPU" : "CPU");
         LOG(INFO) << "Total images: " << samples <<", belonging to " << n_class << " classes, loaded from '" << directory_url << "';";
         for (int i = 0; i < n_class; ++i)
           LOG(INFO) << "  [*] class-id " << i << " => " << keyset[i] << " (" << dict[keyset[i]].size() << " samples included);";
@@ -122,7 +127,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
     }
 
     auto* gpu_info = c->device()->tensorflow_gpu_device_info();
-    int gpu_id = gpu_info->gpu_id;
+    int gpu_id = isGpuDevice ? gpu_info->gpu_id : -1;
 
     workers.resize(parallel);
     for (int i = 0; i < parallel; ++i) {
@@ -145,8 +150,11 @@ class ImagePipeOpKernel: public AsyncOpKernel {
   void BackgroundWorker(int idx, int gpu_id) {
     unsigned int local_seed = seed * parallel + idx;
     auto &worker = workers[idx];
-    CHECK_EQ(cudaSuccess, cudaSetDevice(gpu_id));
-    int depth = 3;
+
+// #if GOOGLE_CUDA
+    if (isGpuDevice)
+      CHECK_EQ(cudaSuccess, cudaSetDevice(gpu_id));
+// #endif
     while (1) {
       while (1) {
         worker.mu_.lock();
@@ -161,7 +169,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
         worker.mu_.unlock();
         break;
       }
-      size_t image_size = (batch_size * depth * height * width) * sizeof(float), label_size = batch_size * sizeof(int);
+      size_t image_size = (batch_size * 3 * height * width) * sizeof(float), label_size = batch_size * sizeof(int);
       void *image_label_mem = nullptr;
       {
         mutex_lock l(worker.mu_);
@@ -172,14 +180,18 @@ class ImagePipeOpKernel: public AsyncOpKernel {
         }
       }
 
-      if (!image_label_mem)
-        CHECK_EQ(cudaSuccess, cudaMallocHost(&image_label_mem, image_size + label_size));
+      if (!image_label_mem) {
+        if (isGpuDevice)
+          CHECK_EQ(cudaSuccess, cudaMallocHost(&image_label_mem, image_size + label_size));
+        else
+          CHECK_EQ(true, !!(image_label_mem = malloc(image_size + label_size)));
+      }
 
       float *image_mem = (float*)image_label_mem;
       int *label_mem = (int*)(((char*)image_label_mem) + image_size);
 
       for (int i = 0; i < batch_size; ++i) {
-        float *image_offset = image_mem + i * depth * height * width;
+        float *image_offset = image_mem + i * 3 * height * width;
         int *label_offset = label_mem + i;
 
         while (1) {
@@ -217,6 +229,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
           uint8 *image_ptr = output.data();
           vector<int> stride;
 
+          int depth = 3;
           if (image_format == "NCHW")
             stride = {width, 1, width * height};
           else // image_format == "NHWC"
@@ -258,8 +271,12 @@ class ImagePipeOpKernel: public AsyncOpKernel {
           worker.ord_que.pop();
         }
 
-        for (auto *buff: worker.buffers)
-          CHECK_EQ(cudaSuccess, cudaFreeHost(buff));
+        for (auto *buff: worker.buffers) {
+          if (isGpuDevice)
+            CHECK_EQ(cudaSuccess, cudaFreeHost(buff));
+          else
+            free(buff);
+        }
       }
       workers.clear();
     }
@@ -292,28 +309,36 @@ class ImagePipeOpKernel: public AsyncOpKernel {
     OP_REQUIRES_OK_ASYNC(c, c->allocate_output(0, image_shape, &image_t), done);
     OP_REQUIRES_OK_ASYNC(c, c->allocate_output(1, label_shape, &label_t), done);
 
-    se::Stream* tensor_stream = c->op_device_context()->stream();
-    const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
-      ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream()); // deprecated: CudaStreamMemberHack());
-
     size_t image_size = (batch_size * 3 * height * width) * sizeof(float);
     float *image_mem = (float*)image_label_mem;
     int *label_mem = (int*)(((char*)image_label_mem) + image_size);
 
-    CHECK_EQ(cudaSuccess, cudaMemcpyAsync((void*)image_t->tensor_data().data(), image_mem, image_t->NumElements() * sizeof(float), cudaMemcpyHostToDevice, cu_stream));
-    CHECK_EQ(cudaSuccess, cudaMemcpyAsync((void*)label_t->tensor_data().data(), label_mem, label_t->NumElements() * sizeof(int), cudaMemcpyHostToDevice, cu_stream));
+    if (isGpuDevice) {
+      se::Stream* tensor_stream = c->op_device_context()->stream();
+      const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
+        ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
 
-    if (synchronize) {
-      CHECK_EQ(cudaSuccess, cudaStreamSynchronize(cu_stream));
+      CHECK_EQ(cudaSuccess, cudaMemcpyAsync((void*)image_t->tensor_data().data(), image_mem, image_t->NumElements() * sizeof(float), cudaMemcpyHostToDevice, cu_stream));
+      CHECK_EQ(cudaSuccess, cudaMemcpyAsync((void*)label_t->tensor_data().data(), label_mem, label_t->NumElements() * sizeof(int), cudaMemcpyHostToDevice, cu_stream));
+
+      if (synchronize) {
+        CHECK_EQ(cudaSuccess, cudaStreamSynchronize(cu_stream));
+
+        mutex_lock l(worker.mu_);
+        worker.buffers.push_back(image_label_mem);
+      } else {
+        cudaEvent_t event;
+        recycleBufferAsync();
+        CHECK_EQ(cudaSuccess, cudaEventCreate(&event));
+        CHECK_EQ(cudaSuccess, cudaEventRecord(event, cu_stream));
+        lazyRecycleBuffers.push_back({event, image_label_mem, &worker});
+      }
+    } else {
+      memcpy(image_t->flat<float>().data(), image_mem, image_t->NumElements() * sizeof(float));
+      memcpy(label_t->flat<int>().data(), label_mem, label_t->NumElements() * sizeof(int));
 
       mutex_lock l(worker.mu_);
       worker.buffers.push_back(image_label_mem);
-    } else {
-      cudaEvent_t event;
-      recycleBufferAsync();
-      CHECK_EQ(cudaSuccess, cudaEventCreate(&event));
-      CHECK_EQ(cudaSuccess, cudaEventRecord(event, cu_stream));
-      lazyRecycleBuffers.push_back({event, image_label_mem, &worker});
     }
     done();
   }
@@ -361,7 +386,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
   int cache_size, parallel, seed, cache_mbytes;
   float rescale;
 
-  bool synchronize, logging, warmup;
+  bool synchronize, logging, warmup, isGpuDevice;
   volatile bool threadStop;
 
   vector<vector<void*>> lazyRecycleBuffers;
@@ -369,7 +394,8 @@ class ImagePipeOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(ImagePipeOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("ImagePipe").Device(DEVICE_GPU), ImagePipeOpKernel);
+REGISTER_KERNEL_BUILDER(Name("ImagePipe").Device(DEVICE_GPU), ImagePipeOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("ImagePipe").Device(DEVICE_CPU), ImagePipeOpKernel<CPUDevice>);
 
 REGISTER_OP("ImagePipe")
     .Output("image: float")
@@ -392,4 +418,3 @@ REGISTER_OP("ImagePipe")
 }
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA

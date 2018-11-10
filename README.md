@@ -40,7 +40,7 @@ cd tf-image-pipe
 ./setup.sh
 
 # Test MNIST Example:
-./examples/mnist_example.py
+./examples/mnist_gpu_example.py
 ```
 
 ### Issues:
