@@ -22,7 +22,7 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
     -o ${DIST}/dist-packages/tensorflow/contrib/image_pipe/_lib_ops.so -std=c++11 -fPIC -O2 -DGOOGLE_CUDA \
     -I${DIST}/dist-packages/tensorflow/include \
     -I${DIST}/dist-packages/tensorflow/include/external/jpeg \
-    -L${DIST}/dist-packages/tensorflow/ -ltensorflow_framework -ljpeg \
+    -L${DIST}/dist-packages/tensorflow/ -ltensorflow_framework -l:libjpeg.so.62 \
     -I/usr/local -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart \
     -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI=${USE_ABI:-0}"
   echo "+ $CMD"

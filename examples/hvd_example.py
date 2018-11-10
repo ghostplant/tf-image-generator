@@ -33,7 +33,7 @@ if synthetic_data:
   val_images = tf.zeros(images.shape, dtype=tf.float32)
   val_labels = tf.zeros(labels.shape, dtype=tf.int32)
 else:
-  dataset = 'flowers'
+  dataset = os.environ['DATASET'] if 'DATASET' in os.environ else 'flowers'
   print('Using Raw "%s" JPEG images from disk to GPU with ZeroCopy ..' % dataset)
   if not os.path.exists('/tmp/' + dataset):
     print('Downloading Raw "%s" JPEG images ..' % dataset)
