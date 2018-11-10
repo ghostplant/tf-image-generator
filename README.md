@@ -40,9 +40,9 @@ cd tf-image-pipe
 ./setup.sh
 
 # Test MNIST Example:
-./examples/mnist_gpu_example.py
+./examples/mnist_example.py
 ```
 
 ### Issues:
 
-If you got error messages like: `tensorflow.python.framework.errors_impl.NotFoundError: /usr/local/lib/python3.5/dist-packages/tensorflow/contrib/image_pipe/_lib_ops.so: undefined symbol: ...`, it means the tensorflow was ever upgraded or downgraded and the ImagePipe ops should be reinstalled by running `./setup.py`.
+If you got error messages like: `tensorflow.python.framework.errors_impl.NotFoundError: /usr/local/lib/python3.5/dist-packages/tensorflow/contrib/image_pipe/_lib_ops.so: undefined symbol: ...`, it means the tensorflow was ever upgraded or downgraded and the ImagePipe ops should be reinstalled by running `./setup.sh`. If it doesn't work, try `USE_ABI=1 ./setup.sh` or `USE_ABI=0 ./setup.sh`.

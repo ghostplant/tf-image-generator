@@ -22,11 +22,13 @@ limitations under the License.
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
-#include "tensorflow/core/lib/jpeg/jpeg_mem.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
 #include <cuda_runtime_api.h>
+
+#include <jpeglib.h>
+#include <setjmp.h>
 
 #include <memory>
 #include <queue>
@@ -47,6 +49,70 @@ using namespace std;
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
 typedef Eigen::GpuDevice GPUDevice;
+
+
+static bool DecodeImage(const string &path, vector<uint8> &output, int &height_, int &width_, int &depths_) {
+  struct jpeg_decompress_struct cinfo;
+  FILE * infile;
+  JSAMPARRAY buffer;
+  int row_stride;
+
+  if ((infile = fopen(path.c_str(), "rb")) == NULL)
+    return false;
+
+  struct my_error_mgr {
+    struct jpeg_error_mgr pub;
+    jmp_buf setjmp_buffer;
+  };
+
+  struct my_error_mgr jerr;
+  cinfo.err = jpeg_std_error(&jerr.pub);
+  jerr.pub.error_exit = [&](j_common_ptr cinfo) {
+    my_error_mgr *myerr = (my_error_mgr*)cinfo->err;
+    (*cinfo->err->output_message)(cinfo);
+    longjmp(myerr->setjmp_buffer, 1);
+  };
+  if (setjmp(jerr.setjmp_buffer)) {
+    jpeg_destroy_decompress(&cinfo);
+    fclose(infile);
+    return false;
+  }
+
+  jpeg_create_decompress(&cinfo);
+  jpeg_stdio_src(&cinfo, infile);
+
+  (void) jpeg_read_header(&cinfo, TRUE);
+  (void) jpeg_start_decompress(&cinfo);
+  height_ = cinfo.output_height;
+  width_ = cinfo.output_width;
+  depths_ = cinfo.output_components;
+  CHECK_EQ(depths_ == 3 || depths_ == 1, true);
+
+  row_stride = cinfo.output_width * cinfo.output_components;
+  buffer = (*cinfo.mem->alloc_sarray)
+		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+
+  output.resize(height_ * width_ * depths_);
+  uint8 *hptr = output.data();
+  while (cinfo.output_scanline < cinfo.output_height) {
+    (void) jpeg_read_scanlines(&cinfo, buffer, 1);
+    memcpy(hptr, buffer[0], row_stride);
+    hptr += row_stride;
+  }
+  (void) jpeg_finish_decompress(&cinfo);
+  jpeg_destroy_decompress(&cinfo);
+  fclose(infile);
+  return true;
+
+  /* jpeg::UncompressFlags flags;
+  jpeg::Uncompress(input.data(), input_size, flags, nullptr,
+    [=, &output, &width_, &height_, &depths_](int width, int height, int depths) -> uint8* {
+       output.resize(width * height * depths);
+       width_ = width, height_ = height, depths_ = depths;
+       return output.data();
+  }); */
+}
+
 
 template <typename Device>
 class ImagePipeOpKernel: public AsyncOpKernel {
@@ -115,7 +181,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
       isGpuDevice = !!c->device()->tensorflow_gpu_device_info();
 
       if (logging) {
-        LOG(INFO) << "Device for Image Buffers: " << (isGpuDevice ? "GPU" : "CPU");
+        LOG(INFO) << "Device for Image Buffers: " << (isGpuDevice ? "GPU" : "CPU (not recommended)");
         LOG(INFO) << "Total images: " << samples <<", belonging to " << n_class << " classes, loaded from '" << directory_url << "';";
         for (int i = 0; i < n_class; ++i)
           LOG(INFO) << "  [*] class-id " << i << " => " << keyset[i] << " (" << dict[keyset[i]].size() << " samples included);";
@@ -202,29 +268,10 @@ class ImagePipeOpKernel: public AsyncOpKernel {
           int it = rand_r(&local_seed) % files.size();
           string path = keyset[label] + files[it];
 
-          int width_ = 0, height_ = 0, depths_ = 0;
+          int height_ = 0, width_ = 0, depths_ = 0;
           vector<uint8> output;
-          {
-            FILE *fp = fopen(path.c_str(), "rb");
-            CHECK_EQ(!!fp, true);
-            fseek(fp, 0, SEEK_END);
-            size_t input_size = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-            vector<uint8> input(input_size);
-            CHECK_EQ(input_size, fread(input.data(), 1, input_size, fp));
-            fclose(fp);
-
-            jpeg::UncompressFlags flags;
-            jpeg::Uncompress(input.data(), input_size, flags, nullptr,
-              [=, &output, &width_, &height_, &depths_](int width, int height, int depths) -> uint8* {
-                 output.resize(width * height * depths);
-                 width_ = width, height_ = height, depths_ = depths;
-                 return output.data();
-            });
-            if (!output.size())
-              continue;
-          }
-          CHECK_EQ(depths_ == 3 || depths_ == 1, true);
+          if (!DecodeImage(path, output, height_, width_, depths_))
+            continue;
 
           uint8 *image_ptr = output.data();
           vector<int> stride;
