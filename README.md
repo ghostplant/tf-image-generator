@@ -6,7 +6,7 @@ Usage: Reading original JPEG image directories stored on SSD (in standard Keras 
 1) Ubuntu 16.04/18.04 (64bit);
 2) NVIDIA CUDA >= 9.0;
 3) SSD (Recommended);
-4) Tensorflow >= 1.10;
+4) Tensorflow >= 1.8.0;
 
 ### Ops Features:
 1) Deterministic image input by configuration of `seed`, which is not supported by tf.keras.preprocessing.ImageDataGenerator;

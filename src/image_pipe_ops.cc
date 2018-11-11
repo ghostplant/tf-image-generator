@@ -142,7 +142,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
     threadStop = false;
     samples = 0, iter = 0;
 
-    cache_size = (size_t(cache_mbytes) << 20) / (batch_size * 3 * height * width) / sizeof(float);
+    cache_size = (size_t(cache_mbytes) << 20) / (batch_size * 3 * height * width) / sizeof(float) / parallel;
     cache_size = max(cache_size, 4);
 
     dirent *ep, *ch_ep;
