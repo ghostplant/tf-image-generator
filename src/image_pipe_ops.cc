@@ -50,6 +50,16 @@ using namespace std;
 typedef Eigen::ThreadPoolDevice CPUDevice;
 typedef Eigen::GpuDevice GPUDevice;
 
+struct my_error_mgr {
+  struct jpeg_error_mgr pub;
+  jmp_buf setjmp_buffer;
+};
+
+static void jpeg_error_exit(j_common_ptr cinfo) {
+  my_error_mgr *myerr = (my_error_mgr*)cinfo->err;
+  (*cinfo->err->output_message)(cinfo);
+  longjmp(myerr->setjmp_buffer, 1);
+}
 
 static bool DecodeImage(const string &path, vector<uint8> &output, int &height_, int &width_, int &depths_) {
   struct jpeg_decompress_struct cinfo;
@@ -60,18 +70,9 @@ static bool DecodeImage(const string &path, vector<uint8> &output, int &height_,
   if ((infile = fopen(path.c_str(), "rb")) == NULL)
     return false;
 
-  struct my_error_mgr {
-    struct jpeg_error_mgr pub;
-    jmp_buf setjmp_buffer;
-  };
-
   struct my_error_mgr jerr;
   cinfo.err = jpeg_std_error(&jerr.pub);
-  jerr.pub.error_exit = [&](j_common_ptr cinfo) {
-    my_error_mgr *myerr = (my_error_mgr*)cinfo->err;
-    (*cinfo->err->output_message)(cinfo);
-    longjmp(myerr->setjmp_buffer, 1);
-  };
+  jerr.pub.error_exit = jpeg_error_exit;
   if (setjmp(jerr.setjmp_buffer)) {
     jpeg_destroy_decompress(&cinfo);
     fclose(infile);
