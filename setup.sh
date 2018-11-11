@@ -14,8 +14,7 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
   rm -rf ${DIST}/dist-packages/tensorflow/contrib/image_pipe
   mkdir -p ${DIST}/dist-packages/tensorflow/contrib/image_pipe
 
-  # Get USE_ABI option from Tensorflow:  python -c 'import tensorflow as tf; print(tf.sysconfig.get_compile_flags())'
-  USE_ABI=${USE_ABI:-$(python3 -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
+  USE_ABI=${USE_ABI:-$(python${PY_VER} -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
 
   CMD="gcc -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
     image_pipe_ops.cc \
@@ -33,4 +32,4 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
 
 done
 
-echo "Finish ImagePipe installation."
+echo "Finish Installation."
