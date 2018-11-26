@@ -10,15 +10,15 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
     continue
   fi
 
-  echo "[Python ${PY_VER}] Tensorflow is found, installing ImagePipe ops.. "
-  rm -rf ${DIST}/dist-packages/tensorflow/contrib/image_pipe
-  mkdir -p ${DIST}/dist-packages/tensorflow/contrib/image_pipe
+  echo "[Python ${PY_VER}] Tensorflow is found, installing ImageGenerator ops.. "
+  rm -rf ${DIST}/dist-packages/tensorflow/contrib/image_generator
+  mkdir -p ${DIST}/dist-packages/tensorflow/contrib/image_generator
 
   USE_ABI=${USE_ABI:-$(python${PY_VER} -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
 
   CMD="gcc -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
-    image_pipe_ops.cc \
-    -o ${DIST}/dist-packages/tensorflow/contrib/image_pipe/_lib_ops.so -std=c++11 -fPIC -O2 -DGOOGLE_CUDA \
+    image_generator_ops.cc \
+    -o ${DIST}/dist-packages/tensorflow/contrib/image_generator/_lib_ops.so -std=c++11 -fPIC -O2 -DGOOGLE_CUDA \
     -I${DIST}/dist-packages/tensorflow/include \
     -I${DIST}/dist-packages/tensorflow/include/external/jpeg \
     -L${DIST}/dist-packages/tensorflow/ -ltensorflow_framework -l:libjpeg.so.62 \
@@ -27,7 +27,7 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
   echo "+ $CMD"
   $CMD
 
-  cp __init__.py ${DIST}/dist-packages/tensorflow/contrib/image_pipe
+  cp __init__.py ${DIST}/dist-packages/tensorflow/contrib/image_generator
   echo "Done."
 
 done

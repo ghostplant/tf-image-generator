@@ -7,7 +7,7 @@
 import horovod.tensorflow as hvd
 import os, sys, warnings, time
 import tensorflow as tf
-from tensorflow.contrib import image_pipe
+from tensorflow.contrib import image_generator
 
 hvd.init()
 device_rank = hvd.rank()
@@ -42,10 +42,10 @@ else:
     assert 0 == os.system('rm -rf /tmp/%s && mv /tmp/%s.part /tmp/%s' % (dataset, dataset, dataset))
 
   # external models only accept NHWC as implicit standard input format
-  images, labels = image_pipe.flow_from_directory(directory_url='/tmp/%s/train/' % dataset, image_format='NHWC',
+  images, labels = image_generator.flow_from_directory(directory_url='/tmp/%s/train/' % dataset, image_format='NHWC',
       batch_size=batch_size, target_size=(height, width), logging=True,
       seed=0, rescale=1.0/255, parallel=8, warmup=True)
-  val_images, val_labels = image_pipe.flow_from_directory(directory_url='/tmp/%s/validate/' % dataset, image_format='NHWC',
+  val_images, val_labels = image_generator.flow_from_directory(directory_url='/tmp/%s/validate/' % dataset, image_format='NHWC',
       batch_size=batch_size, target_size=(height, width), logging=False,
       seed=0, rescale=1.0/255, parallel=2, warmup=True)
 

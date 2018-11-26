@@ -116,10 +116,10 @@ static bool DecodeImage(const string &path, vector<uint8> &output, int &height_,
 
 
 template <typename Device>
-class ImagePipeOpKernel: public AsyncOpKernel {
+class ImageGeneratorOpKernel: public AsyncOpKernel {
  public:
 
-  explicit ImagePipeOpKernel(OpKernelConstruction* c)
+  explicit ImageGeneratorOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c) {
     OP_REQUIRES_OK(c, c->GetAttr("directory_url", &directory_url));
     OP_REQUIRES_OK(c, c->GetAttr("batch_size", &batch_size));
@@ -302,7 +302,7 @@ class ImagePipeOpKernel: public AsyncOpKernel {
     }
   }
 
-  ~ImagePipeOpKernel() {
+  ~ImageGeneratorOpKernel() {
     {
       threadStop = true;
       for (auto &worker: workers) {
@@ -439,13 +439,13 @@ class ImagePipeOpKernel: public AsyncOpKernel {
 
   vector<vector<void*>> lazyRecycleBuffers;
 
-  TF_DISALLOW_COPY_AND_ASSIGN(ImagePipeOpKernel);
+  TF_DISALLOW_COPY_AND_ASSIGN(ImageGeneratorOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("ImagePipe").Device(DEVICE_GPU), ImagePipeOpKernel<GPUDevice>);
-REGISTER_KERNEL_BUILDER(Name("ImagePipe").Device(DEVICE_CPU), ImagePipeOpKernel<CPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("ImageGenerator").Device(DEVICE_GPU), ImageGeneratorOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("ImageGenerator").Device(DEVICE_CPU), ImageGeneratorOpKernel<CPUDevice>);
 
-REGISTER_OP("ImagePipe")
+REGISTER_OP("ImageGenerator")
     .Output("image: float")
     .Output("label: int32")
     .Attr("directory_url: string")

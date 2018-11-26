@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import tensorflow as tf
-from tensorflow.contrib import image_pipe
+from tensorflow.contrib import image_generator
 import os, time
 
 dataset = 'mnist'
@@ -15,11 +15,11 @@ if not os.path.exists('/tmp/' + dataset):
 batch_size = 32
 height, width = 28, 28
 
-print('Pipeline Raw JPEG images from disk to GPU with ZeroCopy..')
-images, labels = image_pipe.flow_from_directory(directory_url='/tmp/%s/train/' % dataset, image_format='NCHW',
+print('Loading JPEG images from disk to GPU with ZeroCopy..')
+images, labels = image_generator.flow_from_directory(directory_url='/tmp/%s/train/' % dataset, image_format='NCHW',
                             batch_size=batch_size, target_size=(height, width), logging=True,
                             seed=0, rescale=1.0/255, parallel=8, warmup=True)
-val_images, val_labels = image_pipe.flow_from_directory(directory_url='/tmp/%s/validate/' % dataset, image_format='NCHW',
+val_images, val_labels = image_generator.flow_from_directory(directory_url='/tmp/%s/validate/' % dataset, image_format='NCHW',
                             batch_size=batch_size, target_size=(height, width), logging=False,
                             seed=0, rescale=1.0/255, parallel=2, warmup=True)
 

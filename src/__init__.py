@@ -13,11 +13,11 @@ library = loader.load_op_library(resource_loader.get_path_to_datafile('_lib_ops.
 
 def flow_from_directory(directory_url, batch_size, target_size, image_format='NCHW',
                parallel=8, rescale=1.0, seed=0, synchronize=True, logging=True, cache_mbytes=256, warmup=True):
-  ''' Wrapper of ImagePipe Kernel Op'''
+  ''' Wrapper of ImageGenerator Kernel Op'''
 
   height, width = target_size
 
-  images, labels = library.image_pipe(
+  images, labels = library.image_generator(
     directory_url=directory_url,
     batch_size=batch_size,
     height=height,
