@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
 [EXEC] IF=enp216s0 && mpiexec -H [hosts,..] --allow-run-as-root --map-by slot --bind-to none -x NCCL_DEBUG=INFO \
-  --mca oob_tcp_if_include ${IF} --mca btl_tcp_if_include ${IF} -x NCCL_SOCKET_IFNAME=${IF} ./hvd_example.py
+  --mca oob_tcp_if_include ${IF} --mca btl_tcp_if_include ${IF} -x NCCL_SOCKET_IFNAME=${IF} ./nccl2_example.py
 '''
 
 import os, sys, warnings, time
