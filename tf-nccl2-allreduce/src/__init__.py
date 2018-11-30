@@ -14,9 +14,11 @@ library = loader.load_op_library(resource_loader.get_path_to_datafile('_lib_ops.
 
 
 def get_node_config():
-  rank = int(os.environ['OMPI_COMM_WORLD_RANK']) if 'OMPI_COMM_WORLD_RANK' in os.environ else 0
-  size = int(os.environ['OMPI_COMM_WORLD_SIZE']) if 'OMPI_COMM_WORLD_SIZE' in os.environ else 1
-  local_rank = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK']) if size > 1 else 0   # Force to accept OpenMPI only
+  comm = MPI.COMM_WORLD
+  local = comm.Split_type(MPI.COMM_TYPE_SHARED)
+  rank = comm.Get_rank()
+  size = comm.Get_size()
+  local_rank = local.Get_rank()
   return rank, size, local_rank
 
 def broadcast_global_variables(sourceRank=0):

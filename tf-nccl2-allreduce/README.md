@@ -4,7 +4,7 @@
 1) Ubuntu 16.04/18.04 (64bit);
 2) NVIDIA CUDA >= 9.0;
 3) Tensorflow >= 1.8.0;
-4) mpi4py (from pip);
+4) Python mpi4py;
 5) NCCL2 devel >= 2.0;
 
 ### Usage Example:
@@ -22,10 +22,10 @@ train_op = opt.apply_gradients(grads)
 
 ```sh
 # Install GPU-based Tensorflow on Ubuntu:
-pip3 install https://github.com/ghostplant/tensorflow-cuda-optimized/releases/download/tf-1.10-linux/tensorflow-1.10_cuda9.0_ubu1604-cp35-cp35m-linux_x86_64.whl
+pip3 install https://github.com/ghostplant/tensorflow-cuda-optimized/releases/download/tf-1.10-linux/tensorflow-1.10_cuda10.0_ubu1604-cp35-cp35m-linux_x86_64.whl
 
-# Install libJPEG 6.2:
-apt install libjpeg62-dev
+# Install Deps:
+apt install libjpeg62-dev python3-mpi4py libopenmpi-dev
 
 # Install ImageGenerator + Nccl2Allreduce Ops:
 git clone https://github.com/ghostplant/tf-image-generator

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import tensorflow as tf
-from tensorflow.contrib import image_generator
 import os, time
+
+# support from https://github.com/ghostplant/tf-image-generator
+from tensorflow.contrib import image_generator
 
 dataset = 'mnist'
 

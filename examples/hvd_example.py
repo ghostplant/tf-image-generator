@@ -7,6 +7,8 @@
 import horovod.tensorflow as hvd
 import os, sys, warnings, time
 import tensorflow as tf
+
+# support from https://github.com/ghostplant/tf-image-generator
 from tensorflow.contrib import image_generator
 
 hvd.init()
