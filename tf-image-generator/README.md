@@ -1,4 +1,4 @@
-# ImageGenerator: Image Generator for native Tensorflow, an extremely-fast data input ops flushing data to GPU directly
+# ImageGenerator: Image Generator for native Tensorflow, a fast data input ops flushing data to GPU directly
 
 Usage: Reading original JPEG image directories stored on SSD (in standard Keras directory format), ImageGenerator could achieve ~96% performance of synthetic dataset training, which is faster than tf.keras.ImageDataGenerator and more simple than tf.TFRecord (no TF native format conversion needed). Better to work with Horovod for best Distributed Training performance.
 
