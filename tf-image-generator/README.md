@@ -40,7 +40,7 @@ apt install libjpeg62-dev
 # Install ImageGenerator Ops:
 git clone https://github.com/ghostplant/tf-image-generator
 cd tf-image-generator
-./setup.sh
+./tf-image-generator/setup.sh
 
 # Test MNIST Example:
 ./examples/mnist_example.py
