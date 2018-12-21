@@ -21,7 +21,8 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#include "tensorflow/core/platform/posix/posix_file_system.h"
+#include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/lib/io/path.h"
 
 #include <jpeglib.h>
 #include <setjmp.h>
@@ -143,13 +144,15 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
     cache_size = (size_t(cache_mbytes) << 20) / (batch_size * 3 * height * width) / sizeof(float) / parallel;
     cache_size = max(cache_size, 4);
 
+    _env = c->device()->env();
+
     vector<string> _classes;
-    if (pfs.GetChildren(directory_url, &_classes).ok()) {
+    if (_env->GetChildren(directory_url, &_classes).ok()) {
       for (string &cls_name: _classes) {
         string sub_dir = io::JoinPath(directory_url, cls_name);
 
         vector<string> _images;
-        if (pfs.GetChildren(sub_dir, &_images).ok()) {
+        if (_env->GetChildren(sub_dir, &_images).ok()) {
           for (string &file: _images) {
             int split = file.find_last_of('.');
             if (split < 0)
@@ -428,7 +431,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
   };
 
   vector<Worker> workers;
-  PosixFileSystem pfs;
+  Env *_env;
 
   string directory_url, image_format;
   int batch_size, height, width;
