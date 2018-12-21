@@ -22,9 +22,6 @@ limitations under the License.
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/platform/posix/posix_file_system.h"
-#include "tensorflow/stream_executor/cuda/cuda_stream.h"
-
-#include <cuda_runtime_api.h>
 
 #include <jpeglib.h>
 #include <setjmp.h>
@@ -36,10 +33,11 @@ limitations under the License.
 #include <thread>
 #include <unordered_map>
 
-
-#if !defined(__linux__)
-#error "Only Linux platform is supported at the moment (with CUDA)."
+#if GOOGLE_CUDA
+#include "tensorflow/stream_executor/cuda/cuda_stream.h"
+#include <cuda_runtime_api.h>
 #endif
+
 
 namespace tensorflow {
 namespace {
@@ -212,10 +210,10 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
     unsigned int local_seed = seed * parallel + idx;
     auto &worker = workers[idx];
 
-// #if GOOGLE_CUDA
+#if GOOGLE_CUDA
     if (isGpuDevice)
       CHECK_EQ(cudaSuccess, cudaSetDevice(gpu_id));
-// #endif
+#endif
     while (1) {
       while (1) {
         worker.mu_.lock();
@@ -242,10 +240,13 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
         }
       }
 
+
       if (!image_label_mem) {
+#if GOOGLE_CUDA
         if (isGpuDevice)
           CHECK_EQ(cudaSuccess, cudaMallocHost(&image_label_mem, image_size + label_size));
         else
+#endif
           CHECK_EQ(true, !!(image_label_mem = malloc(image_size + label_size)));
       }
 
@@ -314,9 +315,11 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
         }
 
         for (auto *buff: worker.buffers) {
+#if GOOGLE_CUDA
           if (isGpuDevice)
             CHECK_EQ(cudaSuccess, cudaFreeHost(buff));
           else
+#endif
             free(buff);
         }
       }
@@ -355,6 +358,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
     float *image_mem = (float*)image_label_mem;
     int *label_mem = (int*)(((char*)image_label_mem) + image_size);
 
+#if GOOGLE_CUDA
     if (isGpuDevice) {
       se::Stream* tensor_stream = c->op_device_context()->stream();
       const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
@@ -371,11 +375,13 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
       } else {
         cudaEvent_t event;
         recycleBufferAsync();
-        CHECK_EQ(cudaSuccess, cudaEventCreate(&event));
+        CHECK_EQ(cudaSuccess, cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
         CHECK_EQ(cudaSuccess, cudaEventRecord(event, cu_stream));
         lazyRecycleBuffers.push_back({event, image_label_mem, &worker});
       }
-    } else {
+    } else
+#endif
+    {
       memcpy(image_t->flat<float>().data(), image_mem, image_t->NumElements() * sizeof(float));
       memcpy(label_t->flat<int>().data(), label_mem, label_t->NumElements() * sizeof(int));
 
@@ -386,6 +392,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
   }
 
   size_t recycleBufferAsync() {
+#if GOOGLE_CUDA
     for (int i = 0; i < lazyRecycleBuffers.size(); ++i) {
       auto res = cudaEventQuery((cudaEvent_t)lazyRecycleBuffers[i][0]);
       if (res == cudaSuccess) {
@@ -401,6 +408,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
       }
       CHECK_EQ(res, cudaErrorNotReady);
     }
+#endif
     return lazyRecycleBuffers.size();
   }
 
@@ -437,7 +445,9 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(ImageGeneratorOpKernel);
 };
 
+#if GOOGLE_CUDA
 REGISTER_KERNEL_BUILDER(Name("ImageGenerator").Device(DEVICE_GPU), ImageGeneratorOpKernel<GPUDevice>);
+#endif
 REGISTER_KERNEL_BUILDER(Name("ImageGenerator").Device(DEVICE_CPU), ImageGeneratorOpKernel<CPUDevice>);
 
 REGISTER_OP("ImageGenerator")
