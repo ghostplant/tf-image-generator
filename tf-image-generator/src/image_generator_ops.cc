@@ -21,10 +21,9 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
+#include "tensorflow/core/platform/posix/posix_file_system.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 
-#include <dirent.h>
-#include <sys/stat.h>
 #include <cuda_runtime_api.h>
 
 #include <jpeglib.h>
@@ -134,6 +133,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
     OP_REQUIRES_OK(c, c->GetAttr("cache_mbytes", &cache_mbytes));
     OP_REQUIRES_OK(c, c->GetAttr("warmup", &warmup));
 
+
     if (directory_url.size() > 0 && directory_url[directory_url.size() - 1] != '/')
       directory_url += '/';
 
@@ -145,32 +145,26 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
     cache_size = (size_t(cache_mbytes) << 20) / (batch_size * 3 * height * width) / sizeof(float) / parallel;
     cache_size = max(cache_size, 4);
 
-    dirent *ep, *ch_ep;
-    DIR *root = opendir(directory_url.c_str());
-    if (root != nullptr) {
-      while ((ep = readdir(root)) != nullptr) {
-        if (!ep->d_name[0] || !strcmp(ep->d_name, ".") || !strcmp(ep->d_name, ".."))
-          continue;
-        string sub_dir = directory_url + ep->d_name + "/";
-        DIR *child = opendir(sub_dir.c_str());
-        if (child == nullptr)
-          continue;
-        while ((ch_ep = readdir(child)) != nullptr) {
-          if (!ch_ep->d_name[0] || !strcmp(ch_ep->d_name, ".") || !strcmp(ch_ep->d_name, ".."))
-            continue;
-          string file = ch_ep->d_name;
-          size_t found = file.find_last_of('.') + 1;
-          if (!found)
-            continue;
-          string ext = file.substr(found);
-          transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-          if (ext != "jpg" && ext != "jpeg")
-            continue;
-          dict[sub_dir].push_back(file);
+    vector<string> _classes;
+    if (pfs.GetChildren(directory_url, &_classes).ok()) {
+      for (string &cls_name: _classes) {
+        string sub_dir = io::JoinPath(directory_url, cls_name);
+
+        vector<string> _images;
+        if (pfs.GetChildren(sub_dir, &_images).ok()) {
+          for (string &file: _images) {
+            int split = file.find_last_of('.');
+            if (split < 0)
+              continue;
+
+            string ext_name = file.substr(split + 1);
+            transform(ext_name.begin(), ext_name.end(), ext_name.begin(), ::tolower);
+            if (ext_name != "jpg" && ext_name != "jpeg")
+              continue;
+            dict[sub_dir].push_back(file);
+          }
         }
-        closedir(child);
       }
-      closedir(root);
 
       for (auto &it: dict) {
         keyset.push_back(it.first);
@@ -185,7 +179,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
         LOG(INFO) << "Device for Image Buffers: " << (isGpuDevice ? "GPU" : "CPU (not recommended)");
         LOG(INFO) << "Total images: " << samples <<", belonging to " << n_class << " classes, loaded from '" << directory_url << "';";
         for (int i = 0; i < n_class; ++i)
-          LOG(INFO) << "  [*] class-id " << i << " => " << keyset[i] << " (" << dict[keyset[i]].size() << " samples included);";
+          LOG(INFO) << "  [*] class-id " << i << " => " << keyset[i] << " with " << dict[keyset[i]].size() << " samples included;";
       }
     }
 
@@ -236,6 +230,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
         worker.mu_.unlock();
         break;
       }
+
       size_t image_size = (batch_size * 3 * height * width) * sizeof(float), label_size = batch_size * sizeof(int);
       void *image_label_mem = nullptr;
       {
@@ -267,11 +262,10 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
           if (files.size() == 0)
             continue;
           int it = rand_r(&local_seed) % files.size();
-          string path = keyset[label] + files[it];
 
           int height_ = 0, width_ = 0, depths_ = 0;
           vector<uint8> output;
-          if (!DecodeImage(path, output, height_, width_, depths_))
+          if (!DecodeImage(io::JoinPath(keyset[label], files[it]), output, height_, width_, depths_))
             continue;
 
           uint8 *image_ptr = output.data();
@@ -426,6 +420,7 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
   };
 
   vector<Worker> workers;
+  PosixFileSystem pfs;
 
   string directory_url, image_format;
   int batch_size, height, width;
