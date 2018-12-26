@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 '''
-[EXEC] IF=enp216s0 && mpiexec -H [hosts,..] --allow-run-as-root --map-by slot --bind-to none -x NCCL_DEBUG=INFO \
+[Local Example]
+# mpiexec -np 4 --allow-run-as-root --map-by slot --bind-to none ./nccl2_example.py
+
+[Cross-node Example]
+# IF=enp216s0 && HOSTS=localhost && mpiexec -H ${HOSTS} --allow-run-as-root --map-by slot --bind-to none -x NCCL_DEBUG=INFO \
   --mca oob_tcp_if_include ${IF} --mca btl_tcp_if_include ${IF} -x NCCL_SOCKET_IFNAME=${IF} ./nccl2_example.py
 '''
 
