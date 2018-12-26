@@ -61,6 +61,11 @@ CUresult cuStreamDestroy_v2(CUstream hStream) {
 
 CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra) {
   assert(hStream != NULL);
+  /*
+  cuDeviceGetAttribute(&total_sm_cnt, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, devOrdinal);
+  cuOccupancyMaxActiveBlocksPerMultiprocessor(&active_blocks, f, blockXYZ, sharedMemBytes);
+  core_util = active_blocks ? float(gridXYZ) / (active_blocks * total_sm_cnt) : 0;
+  */
   _P_LOCAL()(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, hStream, kernelParams, extra);
 }
 
