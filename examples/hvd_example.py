@@ -26,7 +26,7 @@ if not ncclHvdExist:
 synthetic_data = False
 
 batch_size, n_classes = 64, 1001
-height, width = 224, 224
+height, width = 299, 299
 
 if synthetic_data:
   print('Using Synthetic Data as input images ..')
@@ -55,8 +55,8 @@ else:
 def create_model(images, labels, reuse=None):
   with tf.variable_scope('model', reuse=reuse):
     # Using external models
-    from models import resnet_model
-    model = resnet_model.create_resnet50_model()
+    from models import inception_model
+    model = inception_model.Inceptionv3Model()
     if device_rank == 0:
       print('Using %d GPU(s) to %s model %s with %d classes..' % (hvd.size(), 'Eval' if reuse else 'Train', model.__class__.__name__, n_classes))
     X, _ = model.build_network(images, nclass=n_classes, image_depth=3, data_format='NCHW', phase_train=True, fp16_vars=False)
@@ -101,7 +101,7 @@ with tf.Session(config=config) as sess:
       out_loss, top1, top5, out_val_loss, val_top1, val_top5 = sess.run([loss, accuracy, accuracy_5, val_loss, val_accuracy, val_accuracy_5])
       record = time.time()
       print('[%s] step = %d, loss = %.4f, top1 = %3.1f%%, top5 = %3.1f%%, val_loss = %.4f, val_top1 = %3.1f%%, val_top5 = %3.1f%%  (%.2f images/sec)' %
-            (device_name, i + 1, out_loss, top1 * 1e2, top5 * 1e2, out_val_loss, val_top1 * 1e2, val_top5 * 1e2, batch_size * query_per_steps * hvd.size() / during))
+            (device_name, i + 1, out_loss, top1 * 1e2, top5 * 1e2, out_val_loss, val_top1 * 1e2, val_top5 * 1e2, 0.0 if not i else batch_size * query_per_steps * hvd.size() / during))
   if device_rank == 0:
     print('Saving current weights on [%s]..' % device_name)
     np.save(checkpoint_file, sess.run(weights))
