@@ -14,19 +14,22 @@ import tensorflow as tf
 # support from https://github.com/ghostplant/tf-image-generator
 from tensorflow.contrib import image_generator
 from tensorflow.contrib import nccl2_allreduce
+from models import model_config
+
+
+using_synthetic_data = False
+batch_size, n_classes = 64, 1001
+total_steps, query_per_steps = 10000, 100
+model = model_config.inception_model.Inceptionv3Model()  # Selection of models
+image_size = model.get_image_size()
 
 device_rank, device_size, device_local_rank = nccl2_allreduce.get_node_config()
 device_name = 'GPU: %%%dd/%%d' % len(str(device_size)) % (device_rank + 1, device_size)
 
-batch_size, n_classes = 64, 1001
-height, width = 224, 224
-total_steps, query_per_steps = 10000, 100
-using_synthetic_data = False
-
 
 if using_synthetic_data:
   print('Using Synthetic Data as input images ..')
-  images = tf.zeros([batch_size, height, width, 3], dtype=tf.float32)
+  images = tf.zeros([batch_size, image_size, image_size, 3], dtype=tf.float32)
   labels = tf.zeros([batch_size, ], dtype=tf.int32)
   val_images = tf.zeros(images.shape, dtype=tf.float32)
   val_labels = tf.zeros(labels.shape, dtype=tf.int32)
@@ -40,20 +43,17 @@ else:
     assert 0 == os.system('rm -rf /tmp/%s && mv /tmp/%s.part /tmp/%s' % (dataset, dataset, dataset))
 
   images, labels = image_generator.flow_from_directory(directory_url='/tmp/%s/train/' % dataset, image_format='NHWC',
-      batch_size=batch_size, target_size=(height, width), logging=True,
+      batch_size=batch_size, target_size=(image_size, image_size), logging=True,
       seed=device_rank, rescale=1.0/255, parallel=8, warmup=True)
   val_images, val_labels = image_generator.flow_from_directory(directory_url='/tmp/%s/validate/' % dataset, image_format='NHWC',
-      batch_size=batch_size, target_size=(height, width), logging=False,
+      batch_size=batch_size, target_size=(image_size, image_size), logging=False,
       seed=device_rank, rescale=1.0/255, parallel=2, warmup=True)
 
 
 def create_model(images, labels, reuse=None):
   with tf.variable_scope('model', reuse=reuse):
-    # Using external models
-    from models import resnet_model
-    model = resnet_model.create_resnet50_model()
     if device_rank == 0:
-      print('Using %d GPU(s) to %s model %s with %d classes..' % (device_size, 'Eval' if reuse else 'Train', model.__class__.__name__, n_classes))
+      print('Using %d GPU(s) to %s model %s with %d classes of size %d.' % (device_size, 'Eval' if reuse else 'Train', model.__class__.__name__, n_classes, image_size))
     X, _ = model.build_network(images, nclass=n_classes, image_depth=3, data_format='NCHW', phase_train=True, fp16_vars=False)
     loss = tf.losses.sparse_softmax_cross_entropy(logits=X, labels=labels)
     accuracy_5 = tf.reduce_mean(tf.cast(tf.nn.in_top_k(X, labels, 5), tf.float32))
@@ -71,10 +71,10 @@ grads = opt.compute_gradients(loss)
 grads = nccl2_allreduce.allreduce(grads)
 train_op = opt.apply_gradients(grads)
 
-
 config=tf.ConfigProto()
 config.gpu_options.allow_growth=True
 config.gpu_options.visible_device_list = str(device_local_rank)
+
 
 with tf.Session(config=config) as sess:
   sess.run(tf.global_variables_initializer())
