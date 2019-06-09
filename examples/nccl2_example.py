@@ -10,16 +10,31 @@
 
 import os, sys, warnings, time
 import tensorflow as tf
+from models import model_config
 
 # support from https://github.com/ghostplant/tf-image-generator
 from tensorflow.contrib import image_generator
-from tensorflow.contrib import nccl2_allreduce
-from models import model_config
 
+using_nccl2 = True
+if using_nccl2:
+  print('Using Nccl2 allreduce..')
+  from tensorflow.contrib import nccl2_allreduce
+else:
+  print('Not using Nccl2 allreduce..')
+  class nccl2_allreduce(object):
+    @staticmethod
+    def broadcast_global_variables():
+        return []
+    @staticmethod
+    def get_node_config():
+        return (0, 1, 0)
+    @staticmethod
+    def allreduce(grads):
+        return grads
 
 using_synthetic_data = False
-batch_size, n_classes = 64, 1001
-total_steps, query_per_steps = 10000, 100
+batch_size, n_classes = 32, 1001
+total_steps, query_per_steps = 10000, 50
 model = model_config.inception_model.Inceptionv3Model()  # Selection of models
 image_size = model.get_image_size()
 
