@@ -15,7 +15,9 @@ from models import model_config
 # support from https://github.com/ghostplant/tf-image-generator
 from tensorflow.contrib import image_generator
 
+forward_only = False
 using_nccl2 = True
+
 if using_nccl2:
   print('Using Nccl2 allreduce..')
   from tensorflow.contrib import nccl2_allreduce
@@ -34,7 +36,7 @@ else:
 
 using_synthetic_data = False
 batch_size, n_classes = 32, 1001
-total_steps, query_per_steps = 10000, 50
+total_steps, query_per_steps = 5000, 50
 model = model_config.inception_model.Inceptionv3Model()  # Selection of models
 image_size = model.get_image_size()
 
@@ -97,7 +99,7 @@ with tf.Session(config=config) as sess:
     try:
       import numpy as np
       checkpoint_file = './model-checkpoint.npy'
-      weights_data = np.load(checkpoint_file)
+      weights_data = np.load(checkpoint_file, allow_pickle=True)
       assign_ops = [tf.assign(symbolic, host) for symbolic, host in zip(weights, weights_data)]
       sess.run(assign_ops)
       print('Try using pre-trained weights on [%s]..' % device_name)
@@ -107,14 +109,22 @@ with tf.Session(config=config) as sess:
 
   print('Launch Training on %s..' % device_name)
   record = time.time()
+  avg_val_top1, avg_val_top5 = 0, 0
   for i in range(total_steps):
-    sess.run(train_op)
-    if i % query_per_steps == 0 or (i + 1) == total_steps:
+    if not forward_only:
+      sess.run(train_op)
+    if forward_only or (i % query_per_steps == 0 or (i + 1) == total_steps):
       during = time.time() - record
       out_loss, top1, top5, out_val_loss, val_top1, val_top5 = sess.run([loss, accuracy, accuracy_5, val_loss, val_accuracy, val_accuracy_5])
       record = time.time()
       print('[%s] step = %d, loss = %.4f, top1 = %3.1f%%, top5 = %3.1f%%, val_loss = %.4f, val_top1 = %3.1f%%, val_top5 = %3.1f%%  (%.2f images/sec)' %
             (device_name, i + 1, out_loss, top1 * 1e2, top5 * 1e2, out_val_loss, val_top1 * 1e2, val_top5 * 1e2, 0.0 if not i else batch_size * query_per_steps * device_size / during))
+      if forward_only:
+        avg_val_top1 += val_top1
+        avg_val_top5 += val_top5
+  avg_val_top1 /= total_steps
+  avg_val_top5 /= total_steps
+  print('Averyage validation top1 = %.2f, top5 = %.2f;' % (avg_val_top1, avg_val_top5))
   if device_rank == 0:
     print('Saving current weights on [%s]..' % device_name)
     np.save(checkpoint_file, sess.run(weights))
