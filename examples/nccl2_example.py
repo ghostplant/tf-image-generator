@@ -16,7 +16,7 @@ from models import model_config
 from tensorflow.contrib import image_generator
 
 forward_only = False
-using_nccl2 = True
+using_nccl2 = False # True
 
 if using_nccl2:
   print('Using Nccl2 allreduce..')
@@ -35,9 +35,10 @@ else:
         return grads
 
 using_synthetic_data = False
-batch_size, n_classes = 32, 1001
-total_steps, query_per_steps = 5000, 50
-model = model_config.inception_model.Inceptionv3Model()  # Selection of models
+batch_size, n_classes = 128, 1001
+total_steps, query_per_steps = 500, 50
+# model = model_config.inception_model.Inceptionv3Model()  # Selection of models
+model = model_config.alexnet_model.AlexnetModel()  # Selection of models
 image_size = model.get_image_size()
 
 device_rank, device_size, device_local_rank = nccl2_allreduce.get_node_config()
@@ -81,7 +82,7 @@ def create_model(images, labels, reuse=None):
 loss, accuracy, accuracy_5, weights = create_model(images, labels)
 val_loss, val_accuracy, val_accuracy_5, _ = create_model(val_images, val_labels, reuse=True)
 
-lr = 0.001
+lr = 0.00001
 opt = tf.train.RMSPropOptimizer(lr, decay=1e-6, momentum=0.9)
 
 grads = opt.compute_gradients(loss)
