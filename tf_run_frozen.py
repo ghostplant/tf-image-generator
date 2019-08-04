@@ -7,7 +7,7 @@ import tensorflow as tf
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--file', type=str, default='./frozen_graph.pb', help='The file name of the frozen graph.')
+parser.add_argument('--file', type=str, help='The file name of the frozen graph.')
 args = parser.parse_args()
 
 if not os.path.exists(args.file):
