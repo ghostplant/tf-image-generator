@@ -5,6 +5,8 @@ cd $(dirname $0)/src
 for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
   DIST=/usr/local/lib/python${PY_VER}
 
+  [ -e ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so ] || ln -s ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so.1 ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so
+
   if [ ! -e ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so ]; then
     echo "[Python ${PY_VER}] Tensorflow is not found, skip."
     continue
