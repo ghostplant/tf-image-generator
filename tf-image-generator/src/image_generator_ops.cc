@@ -35,8 +35,29 @@ limitations under the License.
 #include <unordered_map>
 
 #if GOOGLE_CUDA
-#include "tensorflow/stream_executor/cuda/cuda_stream.h"
+// #include "tensorflow/stream_executor/cuda/cuda_stream.h"
+#ifndef __HIP_PLATFORM_HCC__
 #include <cuda_runtime_api.h>
+#else
+#include <hip/hip_runtime_api.h>
+
+#define cudaSuccess hipSuccess
+#define cudaSetDevice hipSetDevice
+#define cudaMallocHost hipHostMalloc
+#define cudaFreeHost hipHostFree
+#define cudaStream_t hipStream_t
+#define cudaMemcpyAsync hipMemcpyAsync
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaStreamSynchronize hipStreamSynchronize
+#define cudaEvent_t hipEvent_t
+#define cudaEventCreateWithFlags hipEventCreateWithFlags
+#define cudaEventRecord hipEventRecord
+#define cudaEventQuery hipEventQuery
+#define cudaEventDestroy hipEventDestroy
+#define cudaErrorNotReady hipErrorNotReady
+#define cudaEventDisableTiming 0
+
+#endif
 #endif
 
 
@@ -362,10 +383,21 @@ class ImageGeneratorOpKernel: public AsyncOpKernel {
     int *label_mem = (int*)(((char*)image_label_mem) + image_size);
 
 #if GOOGLE_CUDA
+
+    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
+      const cudaStream_t* ptr = CHECK_NOTNULL(
+        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
+                                                ->stream()
+                                                ->implementation()
+                                                ->GpuStreamMemberHack()));
+      return *ptr;
+    };
+
     if (isGpuDevice) {
-      se::Stream* tensor_stream = c->op_device_context()->stream();
-      const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
-        ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
+      cudaStream_t cu_stream = GetGpuStream(c);
+      // se::Stream* tensor_stream = c->op_device_context()->stream();
+      // cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
+      //   ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
 
       CHECK_EQ(cudaSuccess, cudaMemcpyAsync((void*)image_t->tensor_data().data(), image_mem, image_t->NumElements() * sizeof(float), cudaMemcpyHostToDevice, cu_stream));
       CHECK_EQ(cudaSuccess, cudaMemcpyAsync((void*)label_t->tensor_data().data(), label_mem, label_t->NumElements() * sizeof(int), cudaMemcpyHostToDevice, cu_stream));

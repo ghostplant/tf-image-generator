@@ -5,7 +5,9 @@ cd $(dirname $0)/src
 for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
   DIST=/usr/local/lib/python${PY_VER}
 
-  [ -e ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so ] || ln -s ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so.1 ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so
+  if [ ! -e ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so ] && [ -e ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so.1 ]; then
+    ln -s ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so.1 ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so
+  fi
 
   if [ ! -e ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so ]; then
     echo "[Python ${PY_VER}] Tensorflow is not found, skip."
@@ -18,8 +20,11 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
 
   USE_ABI=${USE_ABI:-$(python${PY_VER} -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
 
-  if ldd ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so | grep libcuda >/dev/null; then
+  if ldd ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so | grep -e libcuda >/dev/null; then
     WITH_CUDA="-DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart"
+  fi
+  if ldd ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so | grep -e libhip_hcc >/dev/null; then
+    WITH_CUDA="-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lhip_hcc -I/usr/local/rocm/include"
   fi
 
   CMD="gcc -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
