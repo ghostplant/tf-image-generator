@@ -21,14 +21,36 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#include "tensorflow/stream_executor/cuda/cuda_stream.h"
+// #include "tensorflow/stream_executor/cuda/cuda_stream.h"
+#ifndef __HIP_PLATFORM_HCC__
+#include <cuda_runtime_api.h>
+#include <nccl.h>
+#else
+#include <hip/hip_runtime_api.h>
+#include <rccl.h>
+
+#define cudaSuccess hipSuccess
+#define cudaSetDevice hipSetDevice
+#define cudaMallocHost hipHostMalloc
+#define cudaFreeHost hipHostFree
+#define cudaStream_t hipStream_t
+#define cudaMemcpyAsync hipMemcpyAsync
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaStreamSynchronize hipStreamSynchronize
+#define cudaEvent_t hipEvent_t
+#define cudaEventCreateWithFlags hipEventCreateWithFlags
+#define cudaEventRecord hipEventRecord
+#define cudaEventQuery hipEventQuery
+#define cudaEventDestroy hipEventDestroy
+#define cudaErrorNotReady hipErrorNotReady
+#define cudaEventDisableTiming 0
+
+#endif
 
 #include <dirent.h>
 #include <sys/stat.h>
-#include <cuda_runtime_api.h>
 #include <pthread.h>
 
-#include <nccl.h>
 #include <mpi.h>
 
 #include <memory>
@@ -114,9 +136,19 @@ class Nccl2AllreduceOpKernel: public AsyncOpKernel {
   }
 
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    se::Stream* tensor_stream = c->op_device_context()->stream();
-    const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
-        ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
+    // se::Stream* tensor_stream = c->op_device_context()->stream();
+    // const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
+    //     ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
+    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
+      const cudaStream_t* ptr = CHECK_NOTNULL(
+        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
+                                                ->stream()
+                                                ->implementation()
+                                                ->GpuStreamMemberHack()));
+      return *ptr;
+    };
+    cudaStream_t cu_stream = GetGpuStream(c);
+
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
       Tensor* output;
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
@@ -160,9 +192,19 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
   }
 
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    se::Stream* tensor_stream = c->op_device_context()->stream();
-    const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
-        ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
+    // se::Stream* tensor_stream = c->op_device_context()->stream();
+    // const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
+    //     ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
+    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
+      const cudaStream_t* ptr = CHECK_NOTNULL(
+        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
+                                                ->stream()
+                                                ->implementation()
+                                                ->GpuStreamMemberHack()));
+      return *ptr;
+    };
+    cudaStream_t cu_stream = GetGpuStream(c);
+
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
       CHECK_EQ(ncclSuccess, ncclBroadcast((const void*)c->input(i).tensor_data().data(), (void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), ncclFloat, sourceRank, ncclComm->getHandle(), cu_stream));
     }

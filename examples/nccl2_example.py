@@ -16,7 +16,7 @@ from models import model_config
 from tensorflow.contrib import image_generator
 
 forward_only = False
-using_nccl2 = False # True
+using_nccl2 = True
 
 if using_nccl2:
   print('Using Nccl2 allreduce..')
@@ -37,8 +37,8 @@ else:
 using_synthetic_data = False
 batch_size, n_classes = 128, 1001
 total_steps, query_per_steps = 500, 50
-# model = model_config.inception_model.Inceptionv3Model()  # Selection of models
-model = model_config.alexnet_model.AlexnetModel()  # Selection of models
+model = model_config.inception_model.Inceptionv3Model()  # Selection of models
+# model = model_config.alexnet_model.AlexnetModel()  # Selection of models
 image_size = model.get_image_size()
 
 device_rank, device_size, device_local_rank = nccl2_allreduce.get_node_config()
