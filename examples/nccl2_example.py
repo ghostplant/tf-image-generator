@@ -12,8 +12,6 @@ import os, sys, warnings, time
 import tensorflow as tf
 from models import model_config
 
-# support from https://github.com/ghostplant/tf-image-generator
-from tensorflow.contrib import image_generator
 
 forward_only = False
 using_nccl2 = True
@@ -34,7 +32,7 @@ else:
     def allreduce(grads):
         return grads
 
-using_synthetic_data = False
+using_synthetic_data = True # False
 batch_size, n_classes = 128, 1001
 total_steps, query_per_steps = 500, 50
 model = model_config.inception_model.Inceptionv3Model()  # Selection of models
@@ -60,6 +58,8 @@ else:
     assert 0 == os.system('curl -L https://github.com/ghostplant/lite-dnn/releases/download/lite-dataset/images-%s.tar.gz | tar xzvf - -C /tmp/%s.part >/dev/null' % (dataset, dataset))
     assert 0 == os.system('rm -rf /tmp/%s && mv /tmp/%s.part /tmp/%s' % (dataset, dataset, dataset))
 
+  # support from https://github.com/ghostplant/tf-image-generator
+  from tensorflow.contrib import image_generator
   images, labels = image_generator.flow_from_directory(directory_url='/tmp/%s/train/' % dataset, image_format='NHWC',
       batch_size=batch_size, target_size=(image_size, image_size), logging=True,
       seed=device_rank, rescale=1.0/255, parallel=8, warmup=True)
