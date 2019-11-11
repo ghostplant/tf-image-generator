@@ -26,7 +26,7 @@ def broadcast_global_variables(sourceRank=0):
   return library.nccl2_broadcast(tf.trainable_variables(), sourceRank=sourceRank)
 
 def allreduce(grad_gv):
-  MPI.COMM_WORLD.Barrier()
+  # MPI.COMM_WORLD.Barrier()
   grad_g = [g for g, _ in grad_gv]
   grad_v = [v for _, v in grad_gv]
   grad_g = library.nccl2_allreduce(grad_g)

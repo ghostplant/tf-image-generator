@@ -20,12 +20,10 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
 
   USE_ABI=${USE_ABI:-$(python${PY_VER} -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
 
-  if ldd ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so | grep -e libcuda >/dev/null; then
-    WITH_CUDA="-DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lnccl"
-  fi
-
   if ldd ${DIST}/dist-packages/tensorflow/libtensorflow_framework.so | grep -e libhip_hcc >/dev/null; then
     WITH_CUDA="-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lhip_hcc -lrccl"
+  else
+    WITH_CUDA="-DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lnccl"
   fi
 
   CMD="gcc -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
