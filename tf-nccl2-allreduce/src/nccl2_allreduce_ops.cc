@@ -88,6 +88,8 @@ class Nccl2Handle {
     CHECK_EQ(ncclSuccess, ncclGroupStart());
     CHECK_EQ(ncclSuccess, ncclCommInitRank(&comm, mpi_size, id, mpi_rank));
     CHECK_EQ(ncclSuccess, ncclGroupEnd());
+
+    dtype = getenv("FP") && atoi(getenv("FP")) == 16 ? ncclHalf : ncclFloat;
   }
 
   ncclComm_t getHandle() const {
@@ -98,6 +100,8 @@ class Nccl2Handle {
     // LOG(INFO) << "Nccl2Handle Destory inter-session communication: device-rank = " << mpi_rank;
     CHECK_EQ(ncclSuccess, ncclCommDestroy(comm));
   }
+
+  ncclDataType_t dtype;
 
  private:
   int mpi_size, mpi_rank;
@@ -152,7 +156,7 @@ class Nccl2AllreduceOpKernel: public AsyncOpKernel {
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
       Tensor* output;
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
-      CHECK_EQ(ncclSuccess, ncclAllReduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), ncclFloat, ncclSum, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(ncclSuccess, ncclAllReduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), __ncclComm->dtype, ncclSum, ncclComm->getHandle(), cu_stream));
     }
     done();
   }
@@ -165,8 +169,9 @@ class Nccl2AllreduceOpKernel: public AsyncOpKernel {
 REGISTER_KERNEL_BUILDER(Name("Nccl2Allreduce").Device(DEVICE_GPU), Nccl2AllreduceOpKernel<GPUDevice>);
 
 REGISTER_OP("Nccl2Allreduce")
-    .Input("tensor: N * float")
-    .Output("sum: N * float")
+    .Input("tensor: N * T")
+    .Output("sum: N * T")
+    .Attr("T: {half, float}")
     .Attr("N: int >= 1")
     .SetIsStateful()
     .SetShapeFn([](shape_inference::InferenceContext* c) {
@@ -206,7 +211,7 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
     cudaStream_t cu_stream = GetGpuStream(c);
 
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      CHECK_EQ(ncclSuccess, ncclBroadcast((const void*)c->input(i).tensor_data().data(), (void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), ncclFloat, sourceRank, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(ncclSuccess, ncclBroadcast((const void*)c->input(i).tensor_data().data(), (void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), __ncclComm->dtype, sourceRank, ncclComm->getHandle(), cu_stream));
     }
     done();
   }
@@ -220,7 +225,8 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
 REGISTER_KERNEL_BUILDER(Name("Nccl2Broadcast").Device(DEVICE_GPU), Nccl2BroadcastOpKernel<GPUDevice>);
 
 REGISTER_OP("Nccl2Broadcast")
-    .Input("tensor: N * float")
+    .Input("tensor: N * T")
+    .Attr("T: {half, float}")
     .Attr("N: int >= 1")
     .Attr("sourceRank: int")
     .SetIsStateful();
