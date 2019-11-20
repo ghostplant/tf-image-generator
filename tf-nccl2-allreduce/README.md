@@ -3,7 +3,7 @@
 ### Environment Requirement:
 1) Ubuntu 16.04/18.04 (64bit);
 2) NVIDIA CUDA >= 9.0;
-3) Tensorflow >= 1.8.0;
+3) Tensorflow == 1.14.x;
 4) Python mpi4py;
 5) NCCL2 devel >= 2.0;
 
