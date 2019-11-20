@@ -3,11 +3,14 @@
 cd $(dirname $0)/src
 
 for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
-  DIST=/usr/local/lib/python${PY_VER}
   if [[ "$LOCAL" != "" ]]; then
     DIST=$HOME/.local/lib/python${PY_VER}/site-packages/tensorflow
   else
     DIST=/usr/local/lib/python${PY_VER}/dist-packages/tensorflow
+  fi
+
+  if [[ -e ${DIST}_core/libtensorflow_framework.so.1 ]]; then
+    DIST=${DIST}_core
   fi
 
   if [ ! -e ${DIST}/libtensorflow_framework.so ] && [ -e ${DIST}/libtensorflow_framework.so.1 ]; then
