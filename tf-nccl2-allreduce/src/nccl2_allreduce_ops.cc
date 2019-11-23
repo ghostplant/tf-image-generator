@@ -36,6 +36,8 @@ limitations under the License.
 #define cudaStream_t hipStream_t
 #define cudaMemcpyAsync hipMemcpyAsync
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define cudaMemcpyDeviceToDevice hipMemcpyDeviceToDevice
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaEvent_t hipEvent_t
 #define cudaEventCreateWithFlags hipEventCreateWithFlags
@@ -102,8 +104,6 @@ class Nccl2Handle {
   }
 
   ncclDataType_t dtype;
-
- private:
   int mpi_size, mpi_rank;
   ncclComm_t comm;
 };
@@ -127,6 +127,65 @@ static void finalizeNccl2() {
   pthread_mutex_unlock(&__g_lock);
 }
 
+
+/////////////////////////////////////////////////////////////////////////////////////
+template <typename Device>
+class SuperDensePostprocessOpKernel: public AsyncOpKernel {
+ public:
+  explicit SuperDensePostprocessOpKernel(OpKernelConstruction* c)
+      : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
+    // OP_REQUIRES_OK(c, c->GetAttr("out_dim", &out_dim));
+  }
+
+  ~SuperDensePostprocessOpKernel() {
+    ncclComm = nullptr;
+    finalizeNccl2();
+  }
+
+  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
+    // se::Stream* tensor_stream = c->op_device_context()->stream();
+    // const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
+    //     ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
+    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
+      const cudaStream_t* ptr = CHECK_NOTNULL(
+        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
+                                                ->stream()
+                                                ->implementation()
+                                                ->GpuStreamMemberHack()));
+      return *ptr;
+    };
+
+    auto &in_shape = c->input(0).shape();
+    CHECK_EQ(2, in_shape.dims());
+
+    cudaStream_t cu_stream = GetGpuStream(c);
+
+    Tensor* output;
+    OP_REQUIRES_OK_ASYNC(c, c->allocate_output(0, TensorShape({__ncclComm->mpi_size, in_shape.dim_size(0), in_shape.dim_size(1)}), &output), done);
+    CHECK_EQ(ncclSuccess, ncclAllGather((const void*)c->input(0).tensor_data().data(), (float*)output->tensor_data().data(),
+      c->input(0).NumElements(), __ncclComm->dtype, ncclComm->getHandle(), cu_stream));
+    done();
+  }
+
+ private:
+  shared_ptr<Nccl2Handle> ncclComm;
+  TF_DISALLOW_COPY_AND_ASSIGN(SuperDensePostprocessOpKernel);
+};
+
+REGISTER_KERNEL_BUILDER(Name("SuperDensePostprocess").Device(DEVICE_GPU), SuperDensePostprocessOpKernel<GPUDevice>);
+
+REGISTER_OP("SuperDensePostprocess")
+    .Input("tensor: T")
+    .Output("output: T")
+    .Attr("T: {float}")
+    .SetIsStateful()
+    .SetShapeFn([](shape_inference::InferenceContext* c) {
+      c->set_output(0, c->UnknownShape());
+      return Status::OK();
+    });
+
+
+/////////////////////////////////////////////////////////////////////////////////////
 template <typename Device>
 class Nccl2AllreduceOpKernel: public AsyncOpKernel {
  public:
@@ -181,6 +240,7 @@ REGISTER_OP("Nccl2Allreduce")
     });
 
 
+/////////////////////////////////////////////////////////////////////////////////////
 template <typename Device>
 class Nccl2BroadcastOpKernel: public AsyncOpKernel {
  public:
@@ -230,6 +290,8 @@ REGISTER_OP("Nccl2Broadcast")
     .Attr("N: int >= 1")
     .Attr("sourceRank: int")
     .SetIsStateful();
+
+/////////////////////////////////////////////////////////////////////////////////////
 }
 }  // namespace tensorflow
 
