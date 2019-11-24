@@ -43,7 +43,7 @@ def super_dense_preprocess(x):
   return x, grad
 
 # e.g. y = nccl2_allreduce.super_dense(y, out_dim=2)
-def super_dense(data, out_dim, kernel_initializer=None, name=None):
+def super_dense(data, out_dim, activation=None, kernel_initializer=None, name=None):
   rank, size, _ = get_node_config()
   assert(out_dim % size == 0)
   x = super_dense_preprocess(data)
@@ -56,6 +56,8 @@ def super_dense(data, out_dim, kernel_initializer=None, name=None):
 
   y = tf.matmul(x, partial_w)
   y = tf.add(y, partial_b)
+  if activation is not None:
+    y = activation(y)
   z = library.super_dense_postprocess(y)
 
   if size > 1:
