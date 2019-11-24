@@ -27,6 +27,9 @@ def broadcast_global_variables(sourceRank=0):
 
 def allreduce(grad_gv):
   # MPI.COMM_WORLD.Barrier()
+  _, size, _ = get_node_config()
+  if size == 1:
+    return grad_gv
   grad_g = [g for g, _ in grad_gv]
   grad_v = [v for _, v in grad_gv]
   grad_g = library.nccl2_allreduce(grad_g)
@@ -54,7 +57,10 @@ def super_dense(data, out_dim, kernel_initializer=None, name=None):
   y = tf.matmul(x, partial_w)
   y = tf.add(y, partial_b)
   z = library.super_dense_postprocess(y)
-  out = tf.reshape(tf.transpose(z, [1, 0, 2]), [int(data.shape[0]), out_dim])
+
+  if size > 1:
+    z = tf.transpose(z, [1, 0, 2])
+  out = tf.reshape(z, [int(data.shape[0]), out_dim])
   return out
 
 @tf.RegisterGradient("SuperDensePostprocess")
