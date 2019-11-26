@@ -46,6 +46,12 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
   $CMD
 
   cp __init__.py ${DIST}/contrib/nccl2_allreduce
+
+  if [ ! -e ${DIST}/../horovod/tensorflow.py ]; then
+    mkdir -p ${DIST}/../horovod
+    cp hvd_tensorflow.py ${DIST}/../horovod/tensorflow.py
+  fi
+
   echo "Done."
 
 done
