@@ -31,12 +31,16 @@ def allreduce(grad_gv):
   non_super_grad = []
   inter_param, local_param = 0, 0
   for g, v in grad_gv:
+    if v is None:
+      non_super_grad.append((g, v))
+      continue
     if 'super_dense_scope' not in v.name:
       non_super_grad.append((g, v))
       inter_param += int(np.product(v.shape))
     else:
       local_param += int(np.product(v.shape))
-  print('Total parameter count = %d / inter, %d / local.' % (inter_param, local_param))
+  if local_param:
+    print('Total parameter count = %d / inter, %d / local.' % (inter_param, local_param))
   _, size, _ = get_node_config()
   if size == 1:
     return grad_gv
