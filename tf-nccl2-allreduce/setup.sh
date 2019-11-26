@@ -7,6 +7,7 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
     DIST=$HOME/.local/lib/python${PY_VER}/site-packages/tensorflow
   else
     DIST=/usr/local/lib/python${PY_VER}/dist-packages/tensorflow
+    WITH_SUPER="-s"
   fi
 
   if [[ -e ${DIST}_core/libtensorflow_framework.so.1 ]]; then
@@ -26,7 +27,7 @@ for PY_VER in 2.6 2.7 3.5 3.6 3.7; do
   rm -rf ${DIST}/contrib/nccl2_allreduce
   mkdir -p ${DIST}/contrib/nccl2_allreduce
 
-  USE_ABI=${USE_ABI:-$(python${PY_VER} -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
+  USE_ABI=${USE_ABI:-$(python${PY_VER} ${WITH_SUPER} -c 'import tensorflow as tf; print("\n".join(tf.sysconfig.get_compile_flags()))' | grep _ABI= | awk -F\= '{print $NF}')}
 
   if ldd ${DIST}/libtensorflow_framework.so | grep -e libhip_hcc >/dev/null; then
     WITH_CUDA="-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lhip_hcc -lrccl"
